@@ -1,0 +1,7 @@
+Letakkan file gambar QRIS kamu di folder ini dengan nama:
+
+  qris.png
+
+Contoh path lengkap: assets/qris.png
+
+Format yang didukung: PNG, JPG (rename ke .png)

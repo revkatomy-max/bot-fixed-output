@@ -1,0 +1,19 @@
+{
+  "providers": ["node"],
+  "phases": {
+    "build": {
+      "cmds": [
+        "npm ci --omit=dev"
+      ]
+    },
+    "deploy": {
+      "cmds": [
+        "node src/deploy-commands.js"
+      ],
+      "onlyIf": "[ \"$RUN_DEPLOY_COMMANDS\" = \"true\" ]"
+    }
+  },
+  "start": {
+    "cmd": "node src/index.js"
+  }
+}
