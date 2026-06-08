@@ -1,13 +1,10 @@
 // src/utils/durationChannelManager.js
-// Mengelola embed daftar order per channel durasi (6h, 12h, 24h, 36h, 48h, 72h)
-
 import { EmbedBuilder } from 'discord.js';
 import config from '../config/config.js';
 import {
   getActiveOrdersByDuration,
   getDurationChannelMessages,
   saveDurationChannelMessage,
-  deleteDurationChannelMessage,
 } from '../database/database.js';
 import logger from './logger.js';
 
@@ -17,69 +14,60 @@ function formatRupiah(amount) {
   }).format(amount);
 }
 
-/**
- * Build embed daftar order untuk satu durasi
- */
+function durationColor(duration) {
+  const colors = {
+    '6h':  0x57F287,
+    '12h': 0x00B0F4,
+    '24h': 0xFEE75C,
+    '36h': 0xFF8C00,
+    '48h': 0x9B59B6,
+    '72h': 0xED4245,
+  };
+  return colors[duration] || 0x5865F2;
+}
+
 function buildDurationListEmbed(duration, orders) {
   const label = config.durationLabels[duration] || duration;
   const totalSlots = orders.reduce((s, o) => s + (o.slots || 0), 0);
 
   const embed = new EmbedBuilder()
     .setColor(durationColor(duration))
-    .setTitle(`📋 DAFTAR ORDER PTPT — ${label}`)
+    .setTitle(`\uD83D\uDCCB DAFTAR ORDER PTPT \u2014 ${label}`)
     .setTimestamp();
 
   if (orders.length === 0) {
     embed.setDescription([
-      `> ⏱ Durasi: **${label}**`,
-      '> 📭 Belum ada order aktif untuk durasi ini.',
+      `> \u23F1 Durasi: **${label}**`,
+      '> \uD83D\uDCED Belum ada order aktif untuk durasi ini.',
     ].join('\n'));
     return embed;
   }
 
-  // Flatten semua slot menjadi baris individual
   const lines = [];
   let nomor = 1;
   for (const order of orders) {
     const slotData = order.slot_data ||
       [{ robloxUsername: order.roblox_username, displayName: order.display_name }];
-
     for (const slot of slotData) {
       lines.push(
-        `\`${String(nomor).padStart(2, '0')}\` ┃ **${slot.robloxUsername}** — ${slot.displayName} ┃ <@${order.user_id}>`
+        `\`${String(nomor).padStart(2, '0')}\` \u2503 **${slot.robloxUsername}** \u2014 ${slot.displayName} \u2503 <@${order.user_id}>`
       );
       nomor++;
     }
   }
 
   embed.setDescription([
-    `> ⏱ Durasi: **${label}**`,
-    `> 👥 Total Slot Terisi: **${totalSlots} slot** dari **${orders.length} order**`,
+    `> \u23F1 Durasi: **${label}**`,
+    `> \uD83D\uDC65 Total Slot Terisi: **${totalSlots} slot** dari **${orders.length} order**`,
     '',
     lines.join('\n'),
     '',
-    `*📅 Diperbarui: <t:${Math.floor(Date.now() / 1000)}:R>*`,
+    `*\uD83D\uDCC5 Diperbarui: <t:${Math.floor(Date.now() / 1000)}:R>*`,
   ].join('\n'));
 
   return embed;
 }
 
-function durationColor(duration) {
-  const colors = {
-    '6h':  0x57F287, // hijau
-    '12h': 0x00B0F4, // biru
-    '24h': 0xFEE75C, // kuning
-    '36h': 0xFF8C00, // oranye
-    '48h': 0x9B59B6, // ungu
-    '72h': 0xED4245, // merah
-  };
-  return colors[duration] || 0x5865F2;
-}
-
-/**
- * Kirim atau update embed daftar order ke channel durasi yang sesuai.
- * Dipanggil setelah order baru diterima atau setelah reset.
- */
 export async function updateDurationChannel(client, duration) {
   try {
     const channelId = config.channels.durationChannels[duration];
@@ -107,7 +95,6 @@ export async function updateDurationChannel(client, duration) {
       }
     }
 
-    // Kirim pesan baru jika belum ada / tidak ditemukan
     const sent = await channel.send({ embeds: [embed] });
     saveDurationChannelMessage(duration, sent.id);
   } catch (err) {
@@ -116,58 +103,56 @@ export async function updateDurationChannel(client, duration) {
 }
 
 /**
- * Kirim embed notifikasi order baru ke channel durasi (satu kali, bukan daftar).
- * Dipakai saat order baru masuk — dikirim sebagai pesan terpisah agar terbaca.
+ * Kirim notifikasi order baru ke channel ORDER MASUK (1 channel semua durasi).
+ * Lalu update embed daftar di channel durasi masing-masing.
  */
 export async function sendOrderNotificationToDurationChannel(client, duration, orderData) {
   try {
-    const channelId = config.channels.durationChannels[duration];
-    if (!channelId) return;
-
-    const channel = await client.channels.fetch(channelId).catch(() => null);
-    if (!channel) return;
-
     const label = config.durationLabels[duration] || duration;
     const slotData = orderData.slotData ||
       [{ robloxUsername: orderData.robloxUsername, displayName: orderData.displayName }];
 
     const slotLines = slotData.map((s, i) =>
-      `> **Slot ${i + 1}:** \`${s.robloxUsername}\` — *${s.displayName}*`
+      `> **Slot ${i + 1}:** \`${s.robloxUsername}\` \u2014 *${s.displayName}*`
     ).join('\n');
 
     const embed = new EmbedBuilder()
       .setColor(durationColor(duration))
-      .setTitle(`🆕 ORDER BARU — ${label}`)
+      .setTitle(`\uD83C\uDD95 ORDER BARU \u2014 ${label}`)
       .setDescription([
         '> Order baru telah **diverifikasi** dan masuk ke daftar.',
         '',
-        '**━━━━━━ 👤 DATA USER ━━━━━━**',
+        '**\u2501\u2501\u2501\u2501\u2501\u2501 \uD83D\uDC64 DATA USER \u2501\u2501\u2501\u2501\u2501\u2501**',
         `> **Discord:** <@${orderData.userId}> (\`${orderData.discordUsername}\`)`,
         `> **User ID:** \`${orderData.userId}\``,
         '',
-        '**━━━━━━ 🎮 DATA ROBLOX ━━━━━━**',
+        '**\u2501\u2501\u2501\u2501\u2501\u2501 \uD83C\uDFAE DATA ROBLOX \u2501\u2501\u2501\u2501\u2501\u2501**',
         slotLines,
         '',
-        '**━━━━━━ 📦 DETAIL ORDER ━━━━━━**',
+        '**\u2501\u2501\u2501\u2501\u2501\u2501 \uD83D\uDCE6 DETAIL ORDER \u2501\u2501\u2501\u2501\u2501\u2501**',
         `> **Durasi:** \`${label}\``,
         `> **Jumlah Slot:** \`${orderData.slots} Slot\``,
         `> **Order ID:** \`${orderData.orderId}\``,
       ].join('\n'))
-      .setFooter({ text: '⚡ PTPT ORDER SYSTEM • Order Masuk' })
+      .setFooter({ text: '\u26A1 PTPT ORDER SYSTEM \u2022 Order Masuk' })
       .setTimestamp();
 
-    await channel.send({ embeds: [embed] });
+    // Kirim ke channel ORDER MASUK (1 channel untuk semua durasi)
+    const orderMasukId = config.channels.orderMasuk;
+    if (orderMasukId) {
+      const orderMasukChannel = await client.channels.fetch(orderMasukId).catch(() => null);
+      if (orderMasukChannel) {
+        await orderMasukChannel.send({ embeds: [embed] });
+      }
+    }
 
-    // Setelah notif, update juga embed daftar lengkap
+    // Update daftar di channel durasi masing-masing
     await updateDurationChannel(client, duration);
   } catch (err) {
     logger.error(`Error sendOrderNotificationToDurationChannel [${duration}]:`, err.message);
   }
 }
 
-/**
- * Update semua channel durasi sekaligus (untuk refresh periodik atau setelah reset all)
- */
 export async function updateAllDurationChannels(client) {
   for (const duration of config.durations) {
     await updateDurationChannel(client, duration);

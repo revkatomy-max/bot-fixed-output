@@ -20,6 +20,9 @@ export const config = {
       process.env.SLOT_LIST_CHANNEL_5,
     ].filter(Boolean),
 
+    // Channel notifikasi order masuk (semua durasi)
+    orderMasuk: process.env.ORDER_MASUK_CHANNEL_ID,
+
     // Channel tujuan per durasi — diisi admin di .env
     durationChannels: {
       '6h':  process.env.DURATION_CHANNEL_6H,
