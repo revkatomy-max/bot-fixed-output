@@ -138,10 +138,18 @@ export async function closeTicketChannel(interaction, reason = null) {
   if (!ticket) return;
 
   try {
-    await interaction.reply({
-      content: '> ⏳ Menutup ticket dalam 5 detik...',
-      ephemeral: false,
-    });
+    // Safe reply — pakai followUp jika interaction sudah di-reply
+    const closeMsg = '> ⏳ Menutup ticket dalam 5 detik...';
+    try {
+      if (interaction.replied || interaction.deferred) {
+        await interaction.followUp({ content: closeMsg, ephemeral: false });
+      } else {
+        await interaction.reply({ content: closeMsg, ephemeral: false });
+      }
+    } catch {
+      // Kalau semua gagal, kirim ke channel langsung
+      await interaction.channel.send(closeMsg).catch(() => {});
+    }
 
     closeTicket(ticket.ticket_id);
 

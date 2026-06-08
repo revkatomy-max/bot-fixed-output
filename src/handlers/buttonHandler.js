@@ -260,8 +260,19 @@ export async function handleButton(interaction) {
           });
           setTimeout(async () => {
             try {
-              await closeTicketChannel(interaction);
-            } catch {}
+              // Pakai channel langsung — interaction sudah expired setelah timeout
+              const ticket = getTicketByChannelId(interaction.channelId);
+              if (!ticket) return;
+              const db = loadDB();
+              if (db.tickets[ticket.ticket_id]) {
+                db.tickets[ticket.ticket_id].status = 'closed';
+                db.tickets[ticket.ticket_id].closed_at = new Date().toISOString();
+                saveDB(db);
+              }
+              await interaction.channel.delete().catch(() => {});
+            } catch (e) {
+              logger.error('Error auto-closing ticket after proof:', e);
+            }
           }, 5000);
         } catch (err) {
           logger.error('Error processing proof upload:', err);
