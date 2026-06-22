@@ -139,10 +139,18 @@ export async function sendOrderNotificationToDurationChannel(client, duration, o
 
     // Kirim ke channel ORDER MASUK (1 channel untuk semua durasi)
     const orderMasukId = config.channels.orderMasuk;
-    if (orderMasukId) {
-      const orderMasukChannel = await client.channels.fetch(orderMasukId).catch(() => null);
-      if (orderMasukChannel) {
+    if (!orderMasukId) {
+      logger.warn('[ORDER_MASUK] ORDER_MASUK_CHANNEL_ID tidak ada di .env / Railway variables');
+    } else {
+      const orderMasukChannel = await client.channels.fetch(orderMasukId).catch((err) => {
+        logger.error(`[ORDER_MASUK] Gagal fetch channel ID "${orderMasukId}": ${err.message}`);
+        return null;
+      });
+      if (!orderMasukChannel) {
+        logger.error(`[ORDER_MASUK] Channel tidak ditemukan atau bot tidak punya akses. Channel ID: "${orderMasukId}"`);
+      } else {
         await orderMasukChannel.send({ embeds: [embed] });
+        logger.info(`[ORDER_MASUK] Notifikasi order ${orderData.orderId} berhasil dikirim ke channel ${orderMasukId}`);
       }
     }
 
