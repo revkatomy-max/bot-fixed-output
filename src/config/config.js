@@ -11,27 +11,9 @@ export const config = {
     ticketLog: process.env.TICKET_LOG_CHANNEL_ID,
     ticketCategory: process.env.TICKET_CATEGORY_ID,
 
-    // Slot list channels (tampilan global per sesi)
-    slotListChannels: [
-      process.env.SLOT_LIST_CHANNEL_1,
-      process.env.SLOT_LIST_CHANNEL_2,
-      process.env.SLOT_LIST_CHANNEL_3,
-      process.env.SLOT_LIST_CHANNEL_4,
-      process.env.SLOT_LIST_CHANNEL_5,
-    ].filter(Boolean),
-
-    // Channel notifikasi order masuk (semua durasi)
-    orderMasuk: process.env.ORDER_MASUK_CHANNEL_ID,
-
-    // Channel tujuan per durasi — diisi admin di .env
-    durationChannels: {
-      '6h':  process.env.DURATION_CHANNEL_6H,
-      '12h': process.env.DURATION_CHANNEL_12H,
-      '24h': process.env.DURATION_CHANNEL_24H,
-      '36h': process.env.DURATION_CHANNEL_36H,
-      '48h': process.env.DURATION_CHANNEL_48H,
-      '72h': process.env.DURATION_CHANNEL_72H,
-    },
+    // Auto list per server
+    slotListRevv: process.env.SLOT_LIST_REVV_CHANNEL_ID,
+    slotListIbo:  process.env.SLOT_LIST_IBO_CHANNEL_ID,
   },
 
   roles: {
@@ -48,13 +30,34 @@ export const config = {
     paymentName: process.env.PAYMENT_NAME || 'PTPT Store',
   },
 
+  servers: ['revv', 'ibo'],
+  serverLabels: {
+    revv: 'Server Revv',
+    ibo:  'Server IBO',
+  },
+
+  maxSlotsPerServer: {
+    revv: parseInt(process.env.MAX_SLOTS_REVV) || 20,
+    ibo:  parseInt(process.env.MAX_SLOTS_IBO)  || 20,
+  },
+
   defaultPrices: {
-    '6h':  parseInt(process.env.DEFAULT_PRICE_6H)  || 5000,
-    '12h': parseInt(process.env.DEFAULT_PRICE_12H) || 10000,
-    '24h': parseInt(process.env.DEFAULT_PRICE_24H) || 20000,
-    '36h': parseInt(process.env.DEFAULT_PRICE_36H) || 30000,
-    '48h': parseInt(process.env.DEFAULT_PRICE_48H) || 35000,
-    '72h': parseInt(process.env.DEFAULT_PRICE_72H) || 50000,
+    revv: {
+      '6h':  parseInt(process.env.REVV_DEFAULT_PRICE_6H)  || 5000,
+      '12h': parseInt(process.env.REVV_DEFAULT_PRICE_12H) || 10000,
+      '24h': parseInt(process.env.REVV_DEFAULT_PRICE_24H) || 20000,
+      '36h': parseInt(process.env.REVV_DEFAULT_PRICE_36H) || 30000,
+      '48h': parseInt(process.env.REVV_DEFAULT_PRICE_48H) || 35000,
+      '72h': parseInt(process.env.REVV_DEFAULT_PRICE_72H) || 50000,
+    },
+    ibo: {
+      '6h':  parseInt(process.env.IBO_DEFAULT_PRICE_6H)  || 5000,
+      '12h': parseInt(process.env.IBO_DEFAULT_PRICE_12H) || 10000,
+      '24h': parseInt(process.env.IBO_DEFAULT_PRICE_24H) || 20000,
+      '36h': parseInt(process.env.IBO_DEFAULT_PRICE_36H) || 30000,
+      '48h': parseInt(process.env.IBO_DEFAULT_PRICE_48H) || 35000,
+      '72h': parseInt(process.env.IBO_DEFAULT_PRICE_72H) || 50000,
+    },
   },
 
   colors: {
@@ -65,6 +68,8 @@ export const config = {
     info:    0x00B0F4,
     purple:  0x9B59B6,
     neon:    0x00FFFF,
+    revv:    0x5865F2,
+    ibo:     0x9B59B6,
   },
 
   durations: ['6h', '12h', '24h', '36h', '48h', '72h'],
@@ -78,7 +83,6 @@ export const config = {
   },
 
   slots: [1, 2, 3, 4, 5],
-  maxSlots: parseInt(process.env.MAX_SLOTS) || 18,
 };
 
 export default config;

@@ -1,61 +1,47 @@
 // src/modals/orderModal.js
-import {
-  ModalBuilder,
-  TextInputBuilder,
-  TextInputStyle,
-  ActionRowBuilder,
-} from 'discord.js';
+import { ModalBuilder, ActionRowBuilder, TextInputBuilder, TextInputStyle } from 'discord.js';
+import config from '../config/config.js';
 
-// Modal dinamis — jumlah kolom USN+DN sesuai slots yang dipilih (max 5 row di Discord)
-// Slot 1 → 2 row (usn1, dn1)
-// Slot 2 → 4 row (usn1, dn1, usn2, dn2)
-// Slot 3-5 → pakai 1 row gabungan per slot (format: "usn1|dn1")
-export function buildOrderModal(slots = 1) {
+export function buildOrderModal(slots) {
   const modal = new ModalBuilder()
     .setCustomId(`modal_order_ptpt_${slots}`)
-    .setTitle(`📦 Form Order PTPT — ${slots} Slot`);
+    .setTitle(`Data Roblox — ${slots} Slot`);
 
   const rows = [];
-
   if (slots <= 2) {
-    // Slot 1-2: pisah kolom usn dan dn per slot (muat 2 row per slot)
     for (let i = 1; i <= slots; i++) {
       rows.push(
         new ActionRowBuilder().addComponents(
           new TextInputBuilder()
             .setCustomId(`roblox_username_${i}`)
-            .setLabel(`Slot ${i} — Username Roblox`)
+            .setLabel(`Username Roblox Slot ${i}`)
             .setStyle(TextInputStyle.Short)
-            .setPlaceholder(`Username Roblox slot ${i}`)
+            .setPlaceholder('contoh: PlayerName123')
             .setRequired(true)
-            .setMinLength(3)
-            .setMaxLength(20)
+            .setMaxLength(50)
         ),
         new ActionRowBuilder().addComponents(
           new TextInputBuilder()
             .setCustomId(`display_name_${i}`)
-            .setLabel(`Slot ${i} — Display Name`)
+            .setLabel(`Display Name Slot ${i}`)
             .setStyle(TextInputStyle.Short)
-            .setPlaceholder(`Display Name slot ${i}`)
+            .setPlaceholder('contoh: Player Name')
             .setRequired(true)
-            .setMinLength(1)
             .setMaxLength(50)
         )
       );
     }
   } else {
-    // Slot 3-5: gabungkan USN|DN dalam 1 baris per slot (Discord max 5 rows)
-    for (let i = 1; i <= slots; i++) {
+    for (let i = 1; i <= Math.min(slots, 5); i++) {
       rows.push(
         new ActionRowBuilder().addComponents(
           new TextInputBuilder()
             .setCustomId(`slot_data_${i}`)
-            .setLabel(`Slot ${i} — Username | Display Name`)
+            .setLabel(`Slot ${i} (Username | DisplayName)`)
             .setStyle(TextInputStyle.Short)
-            .setPlaceholder(`ContohUSN | Contoh Display Name`)
+            .setPlaceholder('PlayerName123 | Player Name')
             .setRequired(true)
-            .setMinLength(3)
-            .setMaxLength(50)
+            .setMaxLength(100)
         )
       );
     }
@@ -65,38 +51,38 @@ export function buildOrderModal(slots = 1) {
   return modal;
 }
 
-export function buildPriceModal(duration) {
-  const modal = new ModalBuilder()
-    .setCustomId(`modal_set_price_${duration}`)
-    .setTitle(`💰 Set Harga ${duration.toUpperCase()}`);
-
-  const priceInput = new TextInputBuilder()
-    .setCustomId('new_price')
-    .setLabel(`Harga baru untuk ${duration} (dalam Rupiah)`)
-    .setStyle(TextInputStyle.Short)
-    .setPlaceholder('Contoh: 20000')
-    .setRequired(true)
-    .setMinLength(1)
-    .setMaxLength(10);
-
-  modal.addComponents(new ActionRowBuilder().addComponents(priceInput));
-  return modal;
+export function buildRejectModal(orderId) {
+  return new ModalBuilder()
+    .setCustomId(`modal_reject_${orderId}`)
+    .setTitle('Alasan Penolakan')
+    .addComponents(
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId('reject_reason')
+          .setLabel('Alasan Penolakan')
+          .setStyle(TextInputStyle.Paragraph)
+          .setPlaceholder('Tulis alasan penolakan pembayaran...')
+          .setRequired(true)
+          .setMaxLength(500)
+      )
+    );
 }
 
-export function buildRejectModal(orderId) {
-  const modal = new ModalBuilder()
-    .setCustomId(`modal_reject_${orderId}`)
-    .setTitle('❌ Tolak Pembayaran');
-
-  const reasonInput = new TextInputBuilder()
-    .setCustomId('reject_reason')
-    .setLabel('Alasan penolakan')
-    .setStyle(TextInputStyle.Paragraph)
-    .setPlaceholder('Jelaskan alasan penolakan pembayaran...')
-    .setRequired(true)
-    .setMinLength(5)
-    .setMaxLength(500);
-
-  modal.addComponents(new ActionRowBuilder().addComponents(reasonInput));
-  return modal;
+export function buildPriceModal(server, duration) {
+  const serverLabel   = config.serverLabels[server] || server;
+  const durationLabel = config.durationLabels[duration] || duration;
+  return new ModalBuilder()
+    .setCustomId(`modal_set_price_${server}_${duration}`)
+    .setTitle(`Set Harga ${serverLabel} — ${durationLabel}`)
+    .addComponents(
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId('new_price')
+          .setLabel(`Harga baru (IDR) untuk ${durationLabel}`)
+          .setStyle(TextInputStyle.Short)
+          .setPlaceholder('contoh: 15000')
+          .setRequired(true)
+          .setMaxLength(10)
+      )
+    );
 }

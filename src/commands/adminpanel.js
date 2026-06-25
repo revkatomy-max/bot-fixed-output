@@ -6,35 +6,27 @@ import config from '../config/config.js';
 
 function getSettings() {
   const db = loadDB();
-  if (!db.settings) {
-    db.settings = {
-      ticketOpen: true,
-      enabledDurations: ['6h', '12h', '24h', '36h', '48h', '72h'],
-    };
-    saveDB(db);
-  }
-  // Pastikan 36h selalu ada di list jika belum pernah tersimpan
-  if (!db.settings.enabledDurations) {
-    db.settings.enabledDurations = [...config.durations];
+  if (!db.settings) db.settings = { ticketOpen: true, enabledDurations: { revv: [...config.durations], ibo: [...config.durations] } };
+  if (!db.settings.enabledDurations?.revv) {
+    db.settings.enabledDurations = { revv: [...config.durations], ibo: [...config.durations] };
     saveDB(db);
   }
   return db.settings;
 }
 
-export function isTicketOpen() {
-  return getSettings().ticketOpen !== false;
-}
+export function isTicketOpen() { return getSettings().ticketOpen !== false; }
 
-export function getEnabledDurations() {
+export function getEnabledDurations(server) {
   const s = getSettings();
-  return s.enabledDurations?.length ? s.enabledDurations : config.durations;
+  return s.enabledDurations?.[server]?.length ? s.enabledDurations[server] : config.durations;
 }
 
-function buildAdminEmbed(settings) {
+export function buildAdminEmbed(settings) {
   const ticketStatus = settings.ticketOpen ? '🟢 BUKA' : '🔴 TUTUP';
-  const durationLines = config.durations.map(d => {
-    const on = settings.enabledDurations?.includes(d);
-    return `> ${on ? '✅' : '❌'} **${config.durationLabels[d]}** (${d})`;
+
+  const buildDurLines = (server) => config.durations.map(d => {
+    const on = settings.enabledDurations?.[server]?.includes(d);
+    return `> ${on ? '✅' : '❌'} ${config.durationLabels[d]} (${d})`;
   }).join('\n');
 
   return new EmbedBuilder()
@@ -43,17 +35,20 @@ function buildAdminEmbed(settings) {
     .setDescription([
       `**🎫 Status Ticket:** ${ticketStatus}`,
       '',
-      '**⏱ Durasi yang Aktif:**',
-      durationLines,
+      `**⏱ Durasi Aktif — ${config.serverLabels.revv}:**`,
+      buildDurLines('revv'),
+      '',
+      `**⏱ Durasi Aktif — ${config.serverLabels.ibo}:**`,
+      buildDurLines('ibo'),
     ].join('\n'))
     .setFooter({ text: '⚡ PTPT Admin Panel' })
     .setTimestamp();
 }
 
-function buildAdminButtons(settings) {
+export function buildAdminButtons(settings) {
   const rows = [];
 
-  // Row 1: Toggle ticket open/close
+  // Row 1: toggle ticket
   rows.push(new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId('admin_toggle_ticket')
@@ -61,25 +56,38 @@ function buildAdminButtons(settings) {
       .setStyle(settings.ticketOpen ? ButtonStyle.Danger : ButtonStyle.Success)
   ));
 
-  // Row 2-3: Toggle tiap durasi (max 5 per row)
-  const durRow1 = new ActionRowBuilder();
-  const durRow2 = new ActionRowBuilder();
+  // Row 2-3: toggle durasi Revv (maks 4 per row)
+  const revvRow1 = new ActionRowBuilder();
+  const revvRow2 = new ActionRowBuilder();
   config.durations.forEach((d, i) => {
-    const on = settings.enabledDurations?.includes(d);
+    const on = settings.enabledDurations?.revv?.includes(d);
     const btn = new ButtonBuilder()
-      .setCustomId(`admin_toggle_dur_${d}`)
-      .setLabel(`${on ? '✅' : '❌'} ${config.durationLabels[d]}`)
+      .setCustomId(`admin_toggle_dur_revv_${d}`)
+      .setLabel(`Revv ${on ? '✅' : '❌'} ${config.durationLabels[d]}`)
       .setStyle(on ? ButtonStyle.Success : ButtonStyle.Secondary);
-    if (i < 4) durRow1.addComponents(btn);
-    else durRow2.addComponents(btn);
+    if (i < 4) revvRow1.addComponents(btn);
+    else revvRow2.addComponents(btn);
   });
-  rows.push(durRow1);
-  if (config.durations.length > 4) rows.push(durRow2);
+  rows.push(revvRow1);
+  if (config.durations.length > 4) rows.push(revvRow2);
+
+  // Row 4-5: toggle durasi IBO
+  const iboRow1 = new ActionRowBuilder();
+  const iboRow2 = new ActionRowBuilder();
+  config.durations.forEach((d, i) => {
+    const on = settings.enabledDurations?.ibo?.includes(d);
+    const btn = new ButtonBuilder()
+      .setCustomId(`admin_toggle_dur_ibo_${d}`)
+      .setLabel(`IBO ${on ? '✅' : '❌'} ${config.durationLabels[d]}`)
+      .setStyle(on ? ButtonStyle.Success : ButtonStyle.Secondary);
+    if (i < 4) iboRow1.addComponents(btn);
+    else iboRow2.addComponents(btn);
+  });
+  rows.push(iboRow1);
+  if (config.durations.length > 4) rows.push(iboRow2);
 
   return rows;
 }
-
-export { buildAdminEmbed, buildAdminButtons };
 
 export default {
   data: new SlashCommandBuilder()
@@ -91,7 +99,6 @@ export default {
     if (!isAdmin(interaction.member)) {
       return interaction.reply({ content: '> ❌ Hanya Administrator yang bisa menggunakan command ini.', flags: 64 });
     }
-
     const settings = getSettings();
     await interaction.reply({
       embeds: [buildAdminEmbed(settings)],

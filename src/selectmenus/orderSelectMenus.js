@@ -1,49 +1,65 @@
 // src/selectmenus/orderSelectMenus.js
-import {
-  ActionRowBuilder,
-  StringSelectMenuBuilder,
-  StringSelectMenuOptionBuilder,
-} from 'discord.js';
+import { ActionRowBuilder, StringSelectMenuBuilder, StringSelectMenuOptionBuilder } from 'discord.js';
 import config from '../config/config.js';
-import { getPrice } from '../database/database.js';
-import { getEnabledDurations } from '../commands/adminpanel.js';
+import { loadDB } from '../database/database.js';
 
-export function buildSlotSelectMenu(maxSlots = 5) {
-  const max = Math.min(maxSlots, 5);
-  const options = config.slots.filter(s => s <= max).map(slot =>
-    new StringSelectMenuOptionBuilder()
-      .setLabel(`${slot} Slot`)
-      .setDescription(`Order ${slot} slot PTPT`)
-      .setValue(`slot_${slot}`)
-      .setEmoji(slot <= 1 ? '1️⃣' : slot <= 2 ? '2️⃣' : slot <= 3 ? '3️⃣' : slot <= 4 ? '4️⃣' : '5️⃣')
-  );
-
-  return new ActionRowBuilder().addComponents(
-    new StringSelectMenuBuilder()
-      .setCustomId('select_slots')
-      .setPlaceholder('🎰 Pilih jumlah slot PTPT...')
-      .addOptions(options)
-  );
+export function buildServerSelectMenu() {
+  const menu = new StringSelectMenuBuilder()
+    .setCustomId('select_server')
+    .setPlaceholder('Pilih server PTPT...')
+    .addOptions(
+      new StringSelectMenuOptionBuilder()
+        .setLabel('🔵 Server Revv')
+        .setDescription('Order slot PTPT di Server Revv')
+        .setValue('server_revv'),
+      new StringSelectMenuOptionBuilder()
+        .setLabel('🟣 Server IBO')
+        .setDescription('Order slot PTPT di Server IBO')
+        .setValue('server_ibo'),
+    );
+  return new ActionRowBuilder().addComponents(menu);
 }
 
-export function buildDurationSelectMenu() {
-  const activeDurations = getEnabledDurations();
-  const options = activeDurations.map(dur => {
-    const price = getPrice(dur);
-    const label = config.durationLabels[dur];
-    const priceText = price ? `Rp ${price.toLocaleString('id-ID')} / slot` : 'Harga belum diset';
-
+export function buildSlotSelectMenu(maxSlot = 5) {
+  const available = Math.min(maxSlot, 5);
+  const options = Array.from({ length: available }, (_, i) => {
+    const n = i + 1;
     return new StringSelectMenuOptionBuilder()
-      .setLabel(label)
-      .setDescription(priceText)
-      .setValue(`dur_${dur}`)
-      .setEmoji('⏱️');
+      .setLabel(`${n} Slot`)
+      .setDescription(`Order ${n} slot sekaligus`)
+      .setValue(`slot_${n}`);
   });
 
-  return new ActionRowBuilder().addComponents(
-    new StringSelectMenuBuilder()
-      .setCustomId('select_duration')
-      .setPlaceholder('⏱️ Pilih durasi order...')
-      .addOptions(options)
+  const menu = new StringSelectMenuBuilder()
+    .setCustomId('select_slots')
+    .setPlaceholder('Pilih jumlah slot...')
+    .addOptions(options);
+  return new ActionRowBuilder().addComponents(menu);
+}
+
+export function buildDurationSelectMenu(server = 'revv') {
+  const db = loadDB();
+  const enabledDurations = db.settings?.enabledDurations?.[server] || config.durations;
+
+  const options = enabledDurations.map(d =>
+    new StringSelectMenuOptionBuilder()
+      .setLabel(config.durationLabels[d] || d)
+      .setDescription(`Durasi ${config.durationLabels[d] || d}`)
+      .setValue(`dur_${d}`)
   );
+
+  if (options.length === 0) {
+    options.push(
+      new StringSelectMenuOptionBuilder()
+        .setLabel('Tidak ada durasi aktif')
+        .setDescription('Hubungi admin')
+        .setValue('dur_none')
+    );
+  }
+
+  const menu = new StringSelectMenuBuilder()
+    .setCustomId('select_duration')
+    .setPlaceholder('Pilih durasi order...')
+    .addOptions(options);
+  return new ActionRowBuilder().addComponents(menu);
 }

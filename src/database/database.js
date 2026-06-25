@@ -1,4 +1,4 @@
-// src/database/database.js - JSON Database (no native modules required)
+// src/database/database.js
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
@@ -8,7 +8,6 @@ import logger from '../utils/logger.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// Railway: gunakan Volume mount path jika tersedia, fallback ke local /data
 const dataDir = process.env.RAILWAY_VOLUME_MOUNT_PATH
   ? join(process.env.RAILWAY_VOLUME_MOUNT_PATH)
   : join(__dirname, '../../data');
@@ -16,19 +15,26 @@ const dbPath = join(dataDir, 'ptpt.json');
 
 mkdirSync(dataDir, { recursive: true });
 
-// Default DB structure
 const defaultDB = {
-  prices: {},
+  prices: {
+    revv: {},
+    ibo: {},
+  },
   tickets: {},
   orders: {},
   cooldowns: {},
   logs: [],
   settings: {
     ticketOpen: true,
-    enabledDurations: [],
+    enabledDurations: {
+      revv: [],
+      ibo: [],
+    },
   },
-  slotMessageIds: {},        // Persistent message IDs untuk slot list channels global
-  durationChannelMessages: {}, // Persistent message IDs per durasi channel
+  slotMessageIds: {
+    revv: null,
+    ibo: null,
+  },
 };
 
 export function loadDB() {
@@ -47,50 +53,69 @@ export function saveDB(data) {
   writeFileSync(dbPath, JSON.stringify(data, null, 2), 'utf-8');
 }
 
-// Init default prices
 function initPrices() {
   const db = loadDB();
   let changed = false;
-  for (const [duration, price] of Object.entries(config.defaultPrices)) {
-    if (!db.prices[duration]) {
-      db.prices[duration] = { price, updated_at: new Date().toISOString(), updated_by: 'system' };
-      changed = true;
+  for (const server of config.servers) {
+    if (!db.prices[server]) { db.prices[server] = {}; changed = true; }
+    for (const [duration, price] of Object.entries(config.defaultPrices[server])) {
+      if (!db.prices[server][duration]) {
+        db.prices[server][duration] = { price, updated_at: new Date().toISOString(), updated_by: 'system' };
+        changed = true;
+      }
     }
+  }
+  // migrate settings.enabledDurations jika masih format lama (array)
+  if (Array.isArray(db.settings?.enabledDurations)) {
+    const old = db.settings.enabledDurations;
+    db.settings.enabledDurations = { revv: [...old], ibo: [...old] };
+    changed = true;
+  }
+  if (!db.settings?.enabledDurations?.revv) {
+    db.settings = db.settings || {};
+    db.settings.enabledDurations = { revv: [...config.durations], ibo: [...config.durations] };
+    changed = true;
+  }
+  if (!db.slotMessageIds?.revv === undefined) {
+    db.slotMessageIds = { revv: null, ibo: null };
+    changed = true;
   }
   if (changed) saveDB(db);
   logger.info('Database initialized (JSON)');
 }
 
-// =================== PRICE FUNCTIONS ===================
+// =================== PRICE ===================
 
-export function getPrice(duration) {
+export function getPrice(server, duration) {
   const db = loadDB();
-  return db.prices[duration]?.price ?? null;
+  return db.prices[server]?.[duration]?.price ?? null;
 }
 
-export function getAllPrices() {
+export function getAllPrices(server) {
   const db = loadDB();
-  return Object.entries(db.prices).map(([duration, data]) => ({
-    duration,
-    price: data.price,
-    updated_at: data.updated_at,
-    updated_by: data.updated_by,
+  const priceObj = db.prices[server] || {};
+  return config.durations.map(d => ({
+    duration: d,
+    price: priceObj[d]?.price ?? config.defaultPrices[server]?.[d] ?? 0,
+    updated_at: priceObj[d]?.updated_at ?? null,
+    updated_by: priceObj[d]?.updated_by ?? 'system',
   }));
 }
 
-export function setPrice(duration, price, updatedBy = 'admin') {
+export function setPrice(server, duration, price, updatedBy = 'admin') {
   const db = loadDB();
-  db.prices[duration] = { price, updated_at: new Date().toISOString(), updated_by: updatedBy };
+  if (!db.prices[server]) db.prices[server] = {};
+  db.prices[server][duration] = { price, updated_at: new Date().toISOString(), updated_by: updatedBy };
   saveDB(db);
 }
 
-export function resetPrices(updatedBy = 'admin') {
-  for (const [duration, price] of Object.entries(config.defaultPrices)) {
-    setPrice(duration, price, updatedBy);
+export function resetPrices(server, updatedBy = 'admin') {
+  for (const [duration, price] of Object.entries(config.defaultPrices[server] || {})) {
+    setPrice(server, duration, price, updatedBy);
   }
 }
 
-// =================== TICKET FUNCTIONS ===================
+// =================== TICKET ===================
 
 export function createTicket(ticketId, channelId, userId, username) {
   const db = loadDB();
@@ -139,12 +164,7 @@ export function getTicketByChannelId(channelId) {
   return Object.values(db.tickets).find(t => t.channel_id === channelId) ?? null;
 }
 
-// =================== COOLDOWN FUNCTIONS ===================
-
-export function getTicketCooldown(userId) {
-  const db = loadDB();
-  return db.cooldowns[userId] ?? null;
-}
+// =================== COOLDOWN ===================
 
 export function setTicketCooldown(userId) {
   const db = loadDB();
@@ -153,22 +173,22 @@ export function setTicketCooldown(userId) {
 }
 
 export function isOnCooldown(userId, cooldownSeconds) {
-  const row = getTicketCooldown(userId);
+  const db = loadDB();
+  const row = db.cooldowns[userId];
   if (!row) return false;
-  const lastCreated = new Date(row.last_created);
-  const diff = (Date.now() - lastCreated.getTime()) / 1000;
+  const diff = (Date.now() - new Date(row.last_created).getTime()) / 1000;
   return diff < cooldownSeconds;
 }
 
 export function getCooldownRemaining(userId, cooldownSeconds) {
-  const row = getTicketCooldown(userId);
+  const db = loadDB();
+  const row = db.cooldowns[userId];
   if (!row) return 0;
-  const lastCreated = new Date(row.last_created);
-  const diff = (Date.now() - lastCreated.getTime()) / 1000;
+  const diff = (Date.now() - new Date(row.last_created).getTime()) / 1000;
   return Math.max(0, Math.ceil(cooldownSeconds - diff));
 }
 
-// =================== ORDER FUNCTIONS ===================
+// =================== ORDER ===================
 
 export function createOrder(data) {
   const db = loadDB();
@@ -178,6 +198,7 @@ export function createOrder(data) {
     ticket_id: data.ticketId,
     user_id: data.userId,
     discord_username: data.discordUsername,
+    server: data.server,
     roblox_username: data.robloxUsername,
     display_name: data.displayName,
     slot_data: data.slotData || [{ robloxUsername: data.robloxUsername, displayName: data.displayName }],
@@ -202,10 +223,9 @@ export function getOrder(orderId) {
 
 export function getOrderByTicket(ticketId) {
   const db = loadDB();
-  const orders = Object.values(db.orders)
+  return Object.values(db.orders)
     .filter(o => o.ticket_id === ticketId)
-    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-  return orders[0] ?? null;
+    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0] ?? null;
 }
 
 export function updateOrderStatus(orderId, status, verifiedBy = null, rejectReason = null) {
@@ -228,51 +248,37 @@ export function updatePaymentProof(orderId, proofUrl) {
   }
 }
 
-// Hitung total slot aktif (order accepted yang belum expired berdasarkan durasi)
-export function getActiveSlotCount() {
+export function getActiveSlotCount(server) {
   const db = loadDB();
   const now = Date.now();
   return Object.values(db.orders)
     .filter(o => {
       if (o.payment_status !== 'accepted') return false;
-      // Cek apakah durasi order masih aktif
-      const durationMs = parseDurationMs(o.duration);
-      if (!durationMs) return true; // kalau ga bisa parse, anggap masih aktif
-      const endTime = new Date(o.updated_at).getTime() + durationMs;
+      if (o.server !== server) return false;
+      const match = o.duration?.match(/^(\d+)h$/);
+      if (!match) return true;
+      const endTime = new Date(o.updated_at).getTime() + parseInt(match[1]) * 3600000;
       return endTime > now;
     })
     .reduce((sum, o) => sum + (o.slots || 0), 0);
 }
 
-// Ambil daftar order aktif yang sudah terurut (untuk keperluan slot per channel)
-export function getActiveOrdersSorted() {
+export function getActiveOrdersByServer(server) {
   const db = loadDB();
   const now = Date.now();
   return Object.values(db.orders)
     .filter(o => {
       if (o.payment_status !== 'accepted') return false;
-      const durationMs = parseDurationMs(o.duration);
-      if (!durationMs) return true;
-      const endTime = new Date(o.updated_at).getTime() + durationMs;
+      if (o.server !== server) return false;
+      const match = o.duration?.match(/^(\d+)h$/);
+      if (!match) return true;
+      const endTime = new Date(o.updated_at).getTime() + parseInt(match[1]) * 3600000;
       return endTime > now;
     })
     .sort((a, b) => new Date(a.updated_at) - new Date(b.updated_at));
 }
 
-function parseDurationMs(duration) {
-  const match = duration.match(/^(\d+)h$/);
-  if (!match) return null;
-  return parseInt(match[1]) * 60 * 60 * 1000;
-}
-
-export function getAllTransactions(limit = 50) {
-  const db = loadDB();
-  return Object.values(db.orders)
-    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-    .slice(0, limit);
-}
-
-// =================== LOG FUNCTIONS ===================
+// =================== LOG ===================
 
 export function logTransaction(orderId, action, performedBy, details = null) {
   const db = loadDB();
@@ -283,71 +289,23 @@ export function logTransaction(orderId, action, performedBy, details = null) {
     details,
     created_at: new Date().toISOString(),
   });
-  // Keep last 1000 logs only
   if (db.logs.length > 1000) db.logs = db.logs.slice(-1000);
+  saveDB(db);
+}
+
+// =================== SLOT MESSAGE IDS ===================
+
+export function getSlotMessageId(server) {
+  const db = loadDB();
+  return db.slotMessageIds?.[server] ?? null;
+}
+
+export function saveSlotMessageId(server, messageId) {
+  const db = loadDB();
+  if (!db.slotMessageIds) db.slotMessageIds = {};
+  db.slotMessageIds[server] = messageId;
   saveDB(db);
 }
 
 initPrices();
 export default { loadDB, saveDB };
-
-// =================== DURATION CHANNEL MESSAGE FUNCTIONS ===================
-// Menyimpan message ID embed per durasi di channel tujuan
-
-export function getDurationChannelMessages() {
-  const db = loadDB();
-  return db.durationChannelMessages || {};
-}
-
-export function saveDurationChannelMessage(duration, messageId) {
-  const db = loadDB();
-  if (!db.durationChannelMessages) db.durationChannelMessages = {};
-  db.durationChannelMessages[duration] = messageId;
-  saveDB(db);
-}
-
-export function deleteDurationChannelMessage(duration) {
-  const db = loadDB();
-  if (!db.durationChannelMessages) db.durationChannelMessages = {};
-  delete db.durationChannelMessages[duration];
-  saveDB(db);
-}
-
-// Ambil semua order aktif berdasarkan durasi tertentu
-export function getActiveOrdersByDuration(duration) {
-  const db = loadDB();
-  const now = Date.now();
-  return Object.values(db.orders)
-    .filter(o => {
-      if (o.payment_status !== 'accepted') return false;
-      if (o.duration !== duration) return false;
-      const match = o.duration?.match(/^(\d+)h$/);
-      if (!match) return true;
-      const endTime = new Date(o.updated_at).getTime() + parseInt(match[1]) * 3600000;
-      return endTime > now;
-    })
-    .sort((a, b) => new Date(a.updated_at) - new Date(b.updated_at));
-}
-
-// Reset semua order accepted pada durasi tertentu
-export function resetOrdersByDuration(duration) {
-  const db = loadDB();
-  let count = 0;
-  const now = Date.now();
-  for (const id in db.orders) {
-    const o = db.orders[id];
-    if (o.payment_status !== 'accepted') continue;
-    if (o.duration !== duration) continue;
-    // Anggap aktif jika belum expire
-    const match = o.duration?.match(/^(\d+)h$/);
-    if (match) {
-      const endTime = new Date(o.updated_at).getTime() + parseInt(match[1]) * 3600000;
-      if (endTime <= now) continue; // sudah expired, skip
-    }
-    db.orders[id].payment_status = 'reset';
-    db.orders[id].updated_at = new Date().toISOString();
-    count++;
-  }
-  saveDB(db);
-  return count;
-}
