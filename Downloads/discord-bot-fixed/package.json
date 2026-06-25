@@ -1,0 +1,24 @@
+{
+  "name": "discord-bot-ptpt",
+  "version": "1.0.0",
+  "description": "Discord Bot PTPT Order System - Production Ready",
+  "main": "src/index.js",
+  "type": "module",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "deploy": "node src/deploy-commands.js"
+  },
+  "dependencies": {
+    "discord.js": "^14.16.3",
+    "dotenv": "^16.4.5",
+    "node-fetch": "^3.3.2",
+    "winston": "^3.14.2"
+  },
+  "keywords": ["discord", "bot", "ptpt", "ticket"],
+  "author": "PTPT Bot",
+  "license": "MIT"
+}
