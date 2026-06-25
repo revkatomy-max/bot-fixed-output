@@ -45,12 +45,11 @@ export async function handleButton(interaction) {
       return interaction.editReply({ content: `> ✅ Ticket berhasil dibuat! ${result.channel}` });
     }
 
-    // ===== ORDER PTPT — tampilkan pilih server =====
+    // ===== ORDER PTPT =====
     if (customId === 'order_ptpt') {
       const cooldown = checkCooldown('order_ptpt', user.id, 5000);
       if (cooldown > 0) return interaction.reply({ content: `> ⏳ Terlalu cepat! Tunggu ${cooldown} detik.`, flags: 64 });
 
-      // Cek apakah setidaknya ada 1 server yang masih punya slot
       const revvFull = getActiveSlotCount('revv') >= config.maxSlotsPerServer.revv;
       const iboFull  = getActiveSlotCount('ibo')  >= config.maxSlotsPerServer.ibo;
 
@@ -152,11 +151,11 @@ export async function handleButton(interaction) {
 
           await msg.delete().catch(() => {});
 
-          const proofEmbed  = createPaymentProofEmbed(orderData, imageUrl);
-          const verifyBtns  = buildModeratorVerifyButtons(order.order_id);
+          const proofEmbed = createPaymentProofEmbed(orderData, imageUrl);
+          const verifyBtns = buildModeratorVerifyButtons(order.order_id);
 
           const sendPayload = {
-            content: `<@&${config.roles.moderator || ''}> 🔔 Bukti pembayaran diupload!`,
+            content: `<@&${config.roles.moderator || ''}> 🔔 Bukti pembayaran diupload! Harap verifikasi.`,
             embeds: [proofEmbed],
             components: [verifyBtns],
           };
@@ -165,18 +164,9 @@ export async function handleButton(interaction) {
           await interaction.channel.send(sendPayload);
           await sendToTransactionLog(guild, createTransactionLogEmbed(orderData, 'proof_uploaded'));
 
-          await interaction.channel.send({ content: '> ✅ Bukti diterima. Ticket ditutup otomatis dalam **5 detik**...' });
+          // Hanya konfirmasi — ticket TIDAK ditutup di sini
+          await interaction.channel.send({ content: '> ✅ Bukti diterima! Menunggu verifikasi moderator...' });
 
-          setTimeout(async () => {
-            try {
-              const ticket = getTicketByChannelId(interaction.channelId);
-              if (!ticket) return;
-              closeTicket(ticket.ticket_id);
-              await interaction.channel.delete().catch(() => {});
-            } catch (e) {
-              logger.error('Error auto-closing ticket after proof:', e);
-            }
-          }, 5000);
         } catch (err) {
           logger.error('Error processing proof upload:', err);
         }
@@ -200,8 +190,8 @@ export async function handleButton(interaction) {
       updateOrderStatus(order.order_id, 'accepted', user.username);
       logTransaction(order.order_id, 'PAYMENT_ACCEPTED', user.username);
 
-      const orderData    = buildOrderData(order);
-      const verifyEmbed  = createVerificationEmbed(order, 'accept', user.username);
+      const orderData   = buildOrderData(order);
+      const verifyEmbed = createVerificationEmbed(order, 'accept', user.username);
 
       await interaction.update({ embeds: [interaction.message.embeds[0], verifyEmbed], components: [] });
       await interaction.followUp({ content: `<@${order.user_id}> ✅ Pembayaranmu telah diverifikasi! Server: **${config.serverLabels[order.server] || order.server}**` });
@@ -215,6 +205,14 @@ export async function handleButton(interaction) {
       const maxSlots    = config.maxSlotsPerServer[order.server];
       if (activeSlots >= maxSlots) {
         await autoCloseOpenTickets(guild, interaction.channel.id, order.server, maxSlots, activeSlots);
+      }
+
+      // Tutup ticket setelah accept
+      const ticket = getTicketByChannelId(interaction.channelId);
+      if (ticket) {
+        closeTicket(ticket.ticket_id);
+        await interaction.channel.send({ content: '> 🔒 Ticket ditutup otomatis dalam **5 detik**...' });
+        setTimeout(async () => { try { await interaction.channel.delete(); } catch {} }, 5000);
       }
       return;
     }
@@ -238,7 +236,6 @@ export async function handleButton(interaction) {
     }
 
     // ===== ADMIN TOGGLE DURASI PER SERVER =====
-    // format: admin_toggle_dur_{server}_{duration}
     if (customId.startsWith('admin_toggle_dur_')) {
       if (!isAdmin(member)) return interaction.reply({ content: '> ❌ Hanya Admin.', flags: 64 });
       const parts    = customId.replace('admin_toggle_dur_', '').split('_');
@@ -272,7 +269,6 @@ export async function handleButton(interaction) {
     }
 
     // ===== ADMIN EDIT HARGA =====
-    // format: admin_edit_price_{server}_{duration}
     if (customId.startsWith('admin_edit_price_')) {
       if (!isModerator(member)) return interaction.reply({ content: '> ❌ Akses ditolak.', flags: 64 });
       const parts    = customId.replace('admin_edit_price_', '').split('_');
@@ -285,7 +281,6 @@ export async function handleButton(interaction) {
     }
 
     // ===== ADMIN RESET HARGA =====
-    // format: admin_reset_prices_{server}
     if (customId.startsWith('admin_reset_prices_')) {
       if (!isAdmin(member)) return interaction.reply({ content: '> ❌ Hanya Admin.', flags: 64 });
       const server = customId.replace('admin_reset_prices_', '');

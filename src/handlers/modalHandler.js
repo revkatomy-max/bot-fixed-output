@@ -4,7 +4,7 @@ import config from '../config/config.js';
 import {
   getPrice, setPrice, getAllPrices,
   createOrder, getOrder, updateOrderStatus,
-  logTransaction, getTicketByChannelId,
+  logTransaction, getTicketByChannelId, closeTicket,
 } from '../database/database.js';
 import {
   createAdminPanelEmbed, createTransactionLogEmbed,
@@ -52,7 +52,6 @@ export async function handleModal(interaction) {
       }
 
       const server = pending?.server || 'revv';
-
       setPendingOrder(user.id, { ...(pending || {}), slots, slotData, step: 'select_duration' });
 
       const lines = slotData.map((s, i) =>
@@ -84,13 +83,12 @@ export async function handleModal(interaction) {
         return interaction.reply({ content: '> ❌ Akses ditolak.', flags: 64 });
       }
 
-      // format: modal_set_price_{server}_{duration}
-      const parts = customId.replace('modal_set_price_', '').split('_');
+      const parts    = customId.replace('modal_set_price_', '').split('_');
       const server   = parts[0];
       const duration = parts[1];
 
       const priceRaw = interaction.fields.getTextInputValue('new_price').trim();
-      const price = parseInt(priceRaw.replace(/\D/g, ''), 10);
+      const price    = parseInt(priceRaw.replace(/\D/g, ''), 10);
 
       if (isNaN(price) || price <= 0) {
         return interaction.reply({ content: '> ❌ Harga tidak valid!', flags: 64 });
@@ -131,7 +129,7 @@ export async function handleModal(interaction) {
       logTransaction(order.order_id, 'PAYMENT_REJECTED', user.username, reason);
 
       const verifyEmbed = createVerificationEmbed(order, 'reject', user.username, reason);
-      const orderData = buildOrderData(order);
+      const orderData   = buildOrderData(order);
 
       try { await interaction.message?.edit({ components: [] }); } catch {}
 
@@ -140,12 +138,21 @@ export async function handleModal(interaction) {
         embeds: [verifyEmbed],
       });
 
+      // Kirim ke transaction log
       const logChannelId = config.channels.transactionLog;
       if (logChannelId) {
         const logChannel = interaction.guild.channels.cache.get(logChannelId);
         if (logChannel) {
           await logChannel.send({ embeds: [createTransactionLogEmbed(orderData, 'rejected', user.username, reason)] });
         }
+      }
+
+      // Tutup ticket setelah reject
+      const ticket = getTicketByChannelId(interaction.channelId);
+      if (ticket) {
+        closeTicket(ticket.ticket_id);
+        await interaction.channel.send({ content: '> 🔒 Ticket ditutup otomatis dalam **5 detik**...' });
+        setTimeout(async () => { try { await interaction.channel.delete(); } catch {} }, 5000);
       }
     }
 
