@@ -66,3 +66,12 @@ export function buildAdminServerSelectButtons() {
       .setStyle(ButtonStyle.Secondary),
   );
 }
+export function buildTicketPanelButtons(slotFull = false) {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId('create_ticket')
+      .setLabel(slotFull ? '🔴 Slot Penuh' : '🎫 Buat Ticket')
+      .setStyle(slotFull ? ButtonStyle.Danger : ButtonStyle.Success)
+      .setDisabled(slotFull),
+  );
+}

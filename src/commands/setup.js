@@ -6,10 +6,10 @@ import { isAdmin } from '../utils/permissions.js';
 import { getActiveSlotCount } from '../database/database.js';
 
 function buildPanelComponents() {
-  const activeSlots = getActiveSlotCount();
-  const maxSlots = config.maxSlots;
-  const slotFull = activeSlots >= maxSlots;
-  return buildTicketPanelButtons(slotFull);
+  const revv = getActiveSlotCount('revv');
+const ibo  = getActiveSlotCount('ibo');
+const activeSlots = revv + ibo;
+const maxSlots = config.maxSlotsPerServer.revv + config.maxSlotsPerServer.ibo;
 }
 
 function buildSlotBar(active, max) {
