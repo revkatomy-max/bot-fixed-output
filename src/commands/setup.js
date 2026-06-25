@@ -7,9 +7,11 @@ import { getActiveSlotCount } from '../database/database.js';
 
 function buildPanelComponents() {
   const revv = getActiveSlotCount('revv');
-const ibo  = getActiveSlotCount('ibo');
-const activeSlots = revv + ibo;
-const maxSlots = config.maxSlotsPerServer.revv + config.maxSlotsPerServer.ibo;
+  const ibo  = getActiveSlotCount('ibo');
+  const activeSlots = revv + ibo;
+  const maxSlots = config.maxSlotsPerServer.revv + config.maxSlotsPerServer.ibo;
+  const slotFull = activeSlots >= maxSlots;
+  return [buildTicketPanelButtons(slotFull)];
 }
 
 function buildSlotBar(active, max) {
@@ -19,8 +21,10 @@ function buildSlotBar(active, max) {
 }
 
 function buildPanelEmbed() {
-  const activeSlots = getActiveSlotCount();
-  const maxSlots = config.maxSlots;
+  const revv = getActiveSlotCount('revv');
+  const ibo  = getActiveSlotCount('ibo');
+  const activeSlots = revv + ibo;
+  const maxSlots = config.maxSlotsPerServer.revv + config.maxSlotsPerServer.ibo;
   const sisaSlot = Math.max(0, maxSlots - activeSlots);
   const slotBar = buildSlotBar(activeSlots, maxSlots);
 
@@ -31,7 +35,7 @@ function buildPanelEmbed() {
       '```',
       '╔══════════════════════════════════╗',
       '║      SELAMAT DATANG DI PTPT      ║',
-      '║         ORDER SYSTEM v1.0        ║',
+      '║         ORDER SYSTEM v2.0        ║',
       '╚══════════════════════════════════╝',
       '```',
       '',
@@ -40,13 +44,15 @@ function buildPanelEmbed() {
       '',
       `**🎰 Ketersediaan Slot:**`,
       `> ${slotBar}`,
-      `> **${activeSlots}/${maxSlots}** slot terpakai — sisa **${sisaSlot} slot**`,
+      `> 🔵 **Server Revv:** ${revv}/${config.maxSlotsPerServer.revv} slot`,
+      `> 🟣 **Server IBO:** ${ibo}/${config.maxSlotsPerServer.ibo} slot`,
+      `> Total: **${activeSlots}/${maxSlots}** — sisa **${sisaSlot} slot**`,
       '',
       '**📋 Cara Order:**',
-      '> 1️⃣ Klik tombol **ORDER PTPT** di bawah',
-      '> 2️⃣ Isi form dengan data Roblox kamu',
-      '> 3️⃣ Pilih slot dan durasi yang diinginkan',
-      '> 4️⃣ Scan QR Code dan lakukan pembayaran',
+      '> 1️⃣ Klik tombol **Buat Ticket** di bawah',
+      '> 2️⃣ Pilih server (Revv / IBO)',
+      '> 3️⃣ Pilih jumlah slot dan isi data Roblox',
+      '> 4️⃣ Pilih durasi dan scan QR Code',
       '> 5️⃣ Upload bukti pembayaran',
       '> 6️⃣ Tunggu verifikasi moderator ✅',
     ].join('\n'))
@@ -54,27 +60,22 @@ function buildPanelEmbed() {
     .setTimestamp();
 }
 
-// Simpan referensi panel yang aktif untuk di-refresh
-const activePanels = new Map(); // channelId -> { message, intervalId }
+const activePanels = new Map();
 
 export function startPanelRefresh(client) {
-  // Jalankan refresh setiap 1 menit untuk semua panel aktif
   setInterval(async () => {
     for (const [channelId, { messageId }] of activePanels.entries()) {
       try {
         const channel = await client.channels.fetch(channelId).catch(() => null);
         if (!channel) { activePanels.delete(channelId); continue; }
-
         const message = await channel.messages.fetch(messageId).catch(() => null);
         if (!message) { activePanels.delete(channelId); continue; }
-
-        await message.edit({ embeds: [buildPanelEmbed()], components: [buildPanelComponents()] });
-      } catch (err) {
-        // channel/message sudah dihapus, hapus dari map
+        await message.edit({ embeds: [buildPanelEmbed()], components: buildPanelComponents() });
+      } catch {
         activePanels.delete(channelId);
       }
     }
-  }, 60_000); // setiap 1 menit
+  }, 60_000);
 }
 
 export default {
@@ -87,12 +88,11 @@ export default {
     if (!isAdmin(interaction.member)) {
       return interaction.reply({ content: '> ❌ Hanya Administrator yang bisa menggunakan command ini.', flags: 64 });
     }
-
-    const panelMsg = await interaction.channel.send({ embeds: [buildPanelEmbed()], components: [buildPanelComponents()] });
-
-    // Daftarkan panel untuk auto-refresh
+    const panelMsg = await interaction.channel.send({
+      embeds: [buildPanelEmbed()],
+      components: buildPanelComponents(),
+    });
     activePanels.set(interaction.channelId, { messageId: panelMsg.id });
-
-    await interaction.reply({ content: '> ✅ Panel ticket berhasil dibuat! Slot akan auto-refresh setiap 1 menit.', flags: 64 });
+    await interaction.reply({ content: '> ✅ Panel ticket berhasil dibuat!', flags: 64 });
   }
 };
