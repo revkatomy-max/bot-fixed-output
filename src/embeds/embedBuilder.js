@@ -154,12 +154,18 @@ export function createTransactionLogEmbed(orderData, status, verifier = null, re
         value: [`**Discord:** \`${orderData.discordUsername}\``, `**ID:** \`${orderData.userId}\``].join('\n'),
         inline: true
       },
-      {
+     {
         name: '🎮 Data Roblox',
-        value: [`**Username:** \`${orderData.robloxUsername}\``, `**Display:** \`${orderData.displayName}\``].join('\n'),
-        inline: true
+        value: (() => {
+          const slots = orderData.slotData?.length
+            ? orderData.slotData
+            : [{ robloxUsername: orderData.robloxUsername, displayName: orderData.displayName }];
+          return slots.map((s, i) =>
+            `**Slot ${i + 1}:** \`${s.robloxUsername}\` — *${s.displayName}*`
+          ).join('\n');
+        })(),
+        inline: false
       },
-      { name: '\u200b', value: '\u200b', inline: true },
       {
         name: '📦 Detail Order',
         value: [
