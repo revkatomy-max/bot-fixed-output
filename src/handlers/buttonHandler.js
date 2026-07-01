@@ -190,6 +190,19 @@ export async function handleButton(interaction) {
       updateOrderStatus(order.order_id, 'accepted', user.username);
       logTransaction(order.order_id, 'PAYMENT_ACCEPTED', user.username);
 
+      // Auto-assign role PTPT ke member yang order-nya sudah diverifikasi
+      if (config.roles.ptpt) {
+        try {
+          const targetMember = await guild.members.fetch(order.user_id);
+          if (!targetMember.roles.cache.has(config.roles.ptpt)) {
+            await targetMember.roles.add(config.roles.ptpt);
+            logger.info(`Role PTPT diberikan ke ${targetMember.user.username} (order ${order.order_id})`);
+          }
+        } catch (err) {
+          logger.error(`Gagal assign role PTPT untuk order ${order.order_id}:`, err.message);
+        }
+      }
+
       const orderData   = buildOrderData(order);
       const verifyEmbed = createVerificationEmbed(order, 'accept', user.username);
 
@@ -231,6 +244,26 @@ export async function handleButton(interaction) {
       if (!db.settings) db.settings = { ticketOpen: true, enabledDurations: { revv: [...config.durations], ibo: [...config.durations] } };
       db.settings.ticketOpen = !db.settings.ticketOpen;
       saveDB(db);
+      await interaction.update({ embeds: [buildAdminEmbed(db.settings)], components: buildAdminButtons(db.settings) });
+      return;
+    }
+
+    // ===== ADMIN TOGGLE STATUS SERVER (manual open/close) =====
+    if (customId.startsWith('admin_toggle_server_')) {
+      if (!isAdmin(member)) return interaction.reply({ content: '> ❌ Hanya Admin.', flags: 64 });
+      const server = customId.replace('admin_toggle_server_', '');
+      if (!config.servers.includes(server)) {
+        return interaction.reply({ content: '> ❌ Server tidak valid.', flags: 64 });
+      }
+
+      const db = loadDB();
+      if (!db.settings) db.settings = { ticketOpen: true, enabledDurations: { revv: [...config.durations], ibo: [...config.durations] }, serverOpen: { revv: true, ibo: true } };
+      if (!db.settings.serverOpen) db.settings.serverOpen = { revv: true, ibo: true };
+
+      const currentlyOpen = db.settings.serverOpen[server] !== false;
+      db.settings.serverOpen[server] = !currentlyOpen;
+      saveDB(db);
+
       await interaction.update({ embeds: [buildAdminEmbed(db.settings)], components: buildAdminButtons(db.settings) });
       return;
     }
