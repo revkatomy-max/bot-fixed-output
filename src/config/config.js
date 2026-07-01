@@ -19,6 +19,7 @@ export const config = {
   roles: {
     moderator: process.env.MODERATOR_ROLE_ID,
     admin: process.env.ADMIN_ROLE_ID,
+    ptpt: process.env.PTPT_ROLE_ID,
   },
 
   ticket: {
