@@ -8,6 +8,7 @@ import { createOrderSummaryEmbed, formatRupiah } from '../embeds/embedBuilder.js
 import { buildSlotSelectMenu, buildDurationSelectMenu } from '../selectmenus/orderSelectMenus.js';
 import { buildOrderActionButtons } from '../buttons/buttonBuilder.js';
 import { getPendingOrder, setPendingOrder, clearPendingOrder } from './modalHandler.js';
+import { isServerOpen } from '../commands/adminpanel.js';
 import generateQRCode from '../utils/qrGenerator.js';
 import logger from '../utils/logger.js';
 
@@ -22,6 +23,14 @@ export async function handleSelectMenu(interaction) {
 
       if (!config.servers.includes(server)) {
         return interaction.update({ content: '> ❌ Server tidak valid.', components: [], embeds: [] });
+      }
+
+      if (!isServerOpen(server)) {
+        return interaction.update({
+          content: `> ❌ **${config.serverLabels[server]}** sedang **TUTUP** saat ini.\n> Silakan pilih server lain atau coba lagi nanti.`,
+          components: [],
+          embeds: [],
+        });
       }
 
       const activeSlots = getActiveSlotCount(server);
