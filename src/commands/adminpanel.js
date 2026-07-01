@@ -1,20 +1,30 @@
 // src/commands/adminpanel.js
 import { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, PermissionFlagsBits } from 'discord.js';
 import { isAdmin } from '../utils/permissions.js';
-import { loadDB, saveDB } from '../database/database.js';
+import { loadDB, saveDB, getActiveSlotCount } from '../database/database.js';
 import config from '../config/config.js';
 
 function getSettings() {
   const db = loadDB();
-  if (!db.settings) db.settings = { ticketOpen: true, enabledDurations: { revv: [...config.durations], ibo: [...config.durations] } };
+  if (!db.settings) db.settings = { ticketOpen: true, enabledDurations: { revv: [...config.durations], ibo: [...config.durations] }, serverOpen: { revv: true, ibo: true } };
   if (!db.settings.enabledDurations?.revv) {
     db.settings.enabledDurations = { revv: [...config.durations], ibo: [...config.durations] };
+    saveDB(db);
+  }
+  if (!db.settings.serverOpen) {
+    db.settings.serverOpen = { revv: true, ibo: true };
     saveDB(db);
   }
   return db.settings;
 }
 
 export function isTicketOpen() { return getSettings().ticketOpen !== false; }
+
+// Server dibuka/tutup manual oleh admin (independen dari status penuh/kosong slot)
+export function isServerOpen(server) {
+  const settings = getSettings();
+  return settings.serverOpen?.[server] !== false;
+}
 
 export function getEnabledDurations(server) {
   const s = getSettings();
@@ -29,11 +39,26 @@ export function buildAdminEmbed(settings) {
     return `> ${on ? '✅' : '❌'} ${config.durationLabels[d]} (${d})`;
   }).join('\n');
 
+  const buildServerStatus = (server) => {
+    const active = getActiveSlotCount(server);
+    const max    = config.maxSlotsPerServer[server];
+    const manuallyClosed = settings.serverOpen?.[server] === false;
+    let statusText;
+    if (manuallyClosed) statusText = '🔴 TUTUP (manual)';
+    else if (active >= max) statusText = '🟠 PENUH';
+    else statusText = '🟢 OPEN';
+    return `> ${statusText} — **${config.serverLabels[server]}** (${active}/${max} slot)`;
+  };
+
   return new EmbedBuilder()
     .setColor(0x5865F2)
     .setTitle('⚙️ ADMIN PANEL — PTPT ORDER SYSTEM')
     .setDescription([
       `**🎫 Status Ticket:** ${ticketStatus}`,
+      '',
+      `**🖥 Status Server:**`,
+      buildServerStatus('revv'),
+      buildServerStatus('ibo'),
       '',
       `**⏱ Durasi Aktif — ${config.serverLabels.revv}:**`,
       buildDurLines('revv'),
@@ -48,12 +73,20 @@ export function buildAdminEmbed(settings) {
 export function buildAdminButtons(settings) {
   const rows = [];
 
-  // Row 1: toggle ticket
+  // Row 1: toggle ticket + toggle status server (digabung biar gak nabrak limit 5 row)
   rows.push(new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId('admin_toggle_ticket')
       .setLabel(settings.ticketOpen ? '🔴 Tutup Ticket' : '🟢 Buka Ticket')
-      .setStyle(settings.ticketOpen ? ButtonStyle.Danger : ButtonStyle.Success)
+      .setStyle(settings.ticketOpen ? ButtonStyle.Danger : ButtonStyle.Success),
+    new ButtonBuilder()
+      .setCustomId('admin_toggle_server_revv')
+      .setLabel(settings.serverOpen?.revv === false ? '🟢 Buka Revv' : '🔴 Tutup Revv')
+      .setStyle(settings.serverOpen?.revv === false ? ButtonStyle.Success : ButtonStyle.Danger),
+    new ButtonBuilder()
+      .setCustomId('admin_toggle_server_ibo')
+      .setLabel(settings.serverOpen?.ibo === false ? '🟢 Buka IBO' : '🔴 Tutup IBO')
+      .setStyle(settings.serverOpen?.ibo === false ? ButtonStyle.Success : ButtonStyle.Danger)
   ));
 
   // Row 2-3: toggle durasi Revv (maks 4 per row)
